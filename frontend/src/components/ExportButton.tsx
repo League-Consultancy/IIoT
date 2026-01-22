@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Download, FileSpreadsheet, FileJson, FileText, AlertCircle } from 'lucide-react';
+import { Download, FileSpreadsheet, FileJson, FileText, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { api } from '@/lib/api';
+import ExcelJS from 'exceljs';
 
 interface ExportButtonProps {
     deviceId: string;
@@ -11,7 +13,7 @@ interface ExportButtonProps {
 
 export function ExportButton({ deviceId, dateRange }: ExportButtonProps) {
     const [open, setOpen] = useState(false);
-    const [showNotice, setShowNotice] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
 
     const formats = [
         { value: 'csv' as const, label: 'CSV', icon: FileText },
@@ -19,21 +21,101 @@ export function ExportButton({ deviceId, dateRange }: ExportButtonProps) {
         { value: 'json' as const, label: 'JSON', icon: FileJson },
     ];
 
-    function handleExport(format: string) {
-        // Show notice that exports are not available in serverless mode
-        setOpen(false);
-        setShowNotice(true);
-        setTimeout(() => setShowNotice(false), 5000);
+    async function fetchData() {
+        // Fetch all sessions for determination
+        // In a real app with millions of row, we might need chunking, but for this demo/analytics:
+        const response = await api.getDeviceSessions(
+            deviceId,
+            dateRange.from.toISOString(),
+            dateRange.to.toISOString(),
+            1,
+            10000 // Limit to 10k for client-side safety
+        );
+        return response.data || [];
+    }
+
+    const downloadFile = (blob: Blob, filename: string) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    };
+
+    async function handleExport(formatType: string) {
+        try {
+            setIsExporting(true);
+            setOpen(false);
+
+            const data = await fetchData();
+            const filename = `export_${deviceId}_${format(new Date(), 'yyyyMMdd_HHmmss')}`;
+
+            if (formatType === 'json') {
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                downloadFile(blob, `${filename}.json`);
+            }
+            else if (formatType === 'csv') {
+                // Simple CSV generation
+                const headers = ['Session ID', 'Start Time', 'Stop Time', 'Duration (ms)', 'Ingested At'];
+                const rows = data.map((row: any) => [
+                    row._id,
+                    row.start_time,
+                    row.stop_time,
+                    row.duration_ms,
+                    row.ingested_at
+                ]);
+
+                const csvContent = [
+                    headers.join(','),
+                    ...rows.map((r: any[]) => r.map(c => `"${c}"`).join(','))
+                ].join('\n');
+
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                downloadFile(blob, `${filename}.csv`);
+            }
+            else if (formatType === 'xlsx') {
+                const workbook = new ExcelJS.Workbook();
+                const sheet = workbook.addWorksheet('Sessions');
+
+                sheet.columns = [
+                    { header: 'Session ID', key: '_id', width: 30 },
+                    { header: 'Start Time', key: 'start_time', width: 25 },
+                    { header: 'Stop Time', key: 'stop_time', width: 25 },
+                    { header: 'Duration (ms)', key: 'duration_ms', width: 15 },
+                    { header: 'Ingested At', key: 'ingested_at', width: 25 }
+                ];
+
+                sheet.addRows(data);
+
+                const buffer = await workbook.xlsx.writeBuffer();
+                const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                downloadFile(blob, `${filename}.xlsx`);
+            }
+
+        } catch (error) {
+            console.error('Export failed:', error);
+            alert('Export failed. Please try again.');
+        } finally {
+            setIsExporting(false);
+        }
     }
 
     return (
         <div className="relative">
             <button
-                onClick={() => setOpen(!open)}
+                onClick={() => !isExporting && setOpen(!open)}
+                disabled={isExporting}
                 className="btn-primary flex items-center gap-2"
             >
-                <Download className="w-4 h-4" />
-                Export
+                {isExporting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                    <Download className="w-4 h-4" />
+                )}
+                {isExporting ? 'Exporting...' : 'Export'}
             </button>
 
             {open && (
@@ -60,20 +142,6 @@ export function ExportButton({ deviceId, dateRange }: ExportButtonProps) {
                         ))}
                     </div>
                 </>
-            )}
-
-            {showNotice && (
-                <div className="absolute top-full right-0 mt-2 w-64 p-3 bg-card border rounded-lg shadow-lg z-20">
-                    <div className="flex items-start gap-2">
-                        <AlertCircle className="w-4 h-4 text-yellow-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                            <p className="text-sm font-medium text-foreground">Export Unavailable</p>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                File exports are not available in serverless deployment. View data in the UI instead.
-                            </p>
-                        </div>
-                    </div>
-                </div>
             )}
         </div>
     );
