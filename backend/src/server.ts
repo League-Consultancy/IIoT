@@ -4,6 +4,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import deviceRoutes from './routes/deviceRoutes';
 import dashboardRoutes from './routes/dashboardRoutes';
+import authRoutes from './routes/authRoutes';
 import { tenantContext } from './middleware/tenantContext';
 import { exit } from 'process';
 
@@ -38,6 +39,7 @@ const connectDB = async () => {
 
 // 3. Public Routes (e.g. Health Check, Login)
 app.get('/health', (req, res) => res.status(200).send('OK'));
+app.use('/api/auth', authRoutes);
 
 // 4. Dashboard API Routes (devices, factories, stats, telemetry)
 // Must be mounted before device ingestion to catch GET /devices

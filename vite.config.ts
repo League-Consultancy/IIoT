@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
 
   // Set MongoDB URI for the API plugin
-  process.env.MONGO_URI = env.MONGO_URI || 'mongodb://localhost:27017/iiot_platform';
+  process.env.MONGO_URI = env.MONGO_URL || env.MONGO_URI || 'mongodb://localhost:27017/iiot_platform';
 
   return {
     server: {

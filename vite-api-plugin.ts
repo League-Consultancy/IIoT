@@ -15,7 +15,7 @@ import { MachineSession } from './backend/src/models/MachineSession';
 import { User } from './backend/src/models/User';
 import jwt from 'jsonwebtoken';
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/iiot_platform';
+const MONGO_URI = process.env.MONGO_URL || process.env.MONGO_URI || 'mongodb://localhost:27017/iiot_platform';
 const JWT_SECRET = process.env.JWT_SECRET || 'iiot-platform-secret-key-change-in-production';
 const WS_PORT = parseInt(process.env.WS_PORT || '3002');
 
@@ -608,6 +608,11 @@ export function apiPlugin(): Plugin {
                 } catch (error) {
                     res.status(500).json({ error: 'Failed to fetch telemetry' });
                 }
+            });
+
+            // If no API route matched, pass control back to Vite
+            app.use((req, res, next) => {
+                next();
             });
 
             // Mount Express app as middleware
