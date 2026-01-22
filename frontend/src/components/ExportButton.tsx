@@ -1,9 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
-import { api } from '@/lib/api';
-import { Download, FileSpreadsheet, FileJson, FileText, Check, Loader2 } from 'lucide-react';
+import { Download, FileSpreadsheet, FileJson, FileText, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface ExportButtonProps {
@@ -13,49 +11,7 @@ interface ExportButtonProps {
 
 export function ExportButton({ deviceId, dateRange }: ExportButtonProps) {
     const [open, setOpen] = useState(false);
-    const [exportId, setExportId] = useState<string | null>(null);
-
-    const createExportMutation = useMutation({
-        mutationFn: (format: 'csv' | 'xlsx' | 'json') =>
-            api.createExport(
-                deviceId,
-                format,
-                dateRange.from.toISOString(),
-                dateRange.to.toISOString()
-            ),
-        onSuccess: (data) => {
-            if (data.success) {
-                setExportId(data.data.export_id);
-                // Poll for completion
-                pollExportStatus(data.data.export_id);
-            }
-        },
-    });
-
-    async function pollExportStatus(id: string) {
-        const checkStatus = async () => {
-            try {
-                const response = await api.getExportStatus(id);
-                if (response.data.status === 'completed') {
-                    // Trigger download
-                    window.open(api.getExportDownloadUrl(id), '_blank');
-                    setExportId(null);
-                    setOpen(false);
-                } else if (response.data.status === 'failed') {
-                    alert('Export failed: ' + response.data.error_message);
-                    setExportId(null);
-                } else {
-                    // Still processing, check again
-                    setTimeout(checkStatus, 1000);
-                }
-            } catch (error) {
-                console.error('Failed to check export status:', error);
-                setExportId(null);
-            }
-        };
-
-        checkStatus();
-    }
+    const [showNotice, setShowNotice] = useState(false);
 
     const formats = [
         { value: 'csv' as const, label: 'CSV', icon: FileText },
@@ -63,27 +19,24 @@ export function ExportButton({ deviceId, dateRange }: ExportButtonProps) {
         { value: 'json' as const, label: 'JSON', icon: FileJson },
     ];
 
+    function handleExport(format: string) {
+        // Show notice that exports are not available in serverless mode
+        setOpen(false);
+        setShowNotice(true);
+        setTimeout(() => setShowNotice(false), 5000);
+    }
+
     return (
         <div className="relative">
             <button
                 onClick={() => setOpen(!open)}
                 className="btn-primary flex items-center gap-2"
-                disabled={createExportMutation.isPending || !!exportId}
             >
-                {createExportMutation.isPending || exportId ? (
-                    <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Exporting...
-                    </>
-                ) : (
-                    <>
-                        <Download className="w-4 h-4" />
-                        Export
-                    </>
-                )}
+                <Download className="w-4 h-4" />
+                Export
             </button>
 
-            {open && !createExportMutation.isPending && !exportId && (
+            {open && (
                 <>
                     <div
                         className="fixed inset-0 z-10"
@@ -98,9 +51,7 @@ export function ExportButton({ deviceId, dateRange }: ExportButtonProps) {
                         {formats.map((fmt) => (
                             <button
                                 key={fmt.value}
-                                onClick={() => {
-                                    createExportMutation.mutate(fmt.value);
-                                }}
+                                onClick={() => handleExport(fmt.value)}
                                 className="w-full px-4 py-2 text-left text-sm hover:bg-muted transition-colors flex items-center gap-2"
                             >
                                 <fmt.icon className="w-4 h-4 text-muted-foreground" />
@@ -109,6 +60,20 @@ export function ExportButton({ deviceId, dateRange }: ExportButtonProps) {
                         ))}
                     </div>
                 </>
+            )}
+
+            {showNotice && (
+                <div className="absolute top-full right-0 mt-2 w-64 p-3 bg-card border rounded-lg shadow-lg z-20">
+                    <div className="flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 text-yellow-500 mt-0.5 flex-shrink-0" />
+                        <div>
+                            <p className="text-sm font-medium text-foreground">Export Unavailable</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                File exports are not available in serverless deployment. View data in the UI instead.
+                            </p>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
