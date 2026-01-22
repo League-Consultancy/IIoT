@@ -4,6 +4,8 @@ import jwt, { type SignOptions } from 'jsonwebtoken';
 import { connectDB } from '@/lib/db';
 import { User, Tenant } from '@/lib/models';
 
+export const dynamic = 'force-dynamic';
+
 const JWT_SECRET = process.env.JWT_SECRET!;
 const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || '7d') as SignOptions['expiresIn'];
 

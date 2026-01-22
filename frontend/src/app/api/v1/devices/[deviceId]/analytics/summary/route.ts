@@ -4,6 +4,8 @@ import { connectDB } from '@/lib/db';
 import { DeviceSession, Device, Factory } from '@/lib/models';
 import { Types } from 'mongoose';
 
+export const dynamic = 'force-dynamic';
+
 const JWT_SECRET = process.env.JWT_SECRET!;
 
 interface JwtPayload {

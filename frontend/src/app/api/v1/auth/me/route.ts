@@ -3,6 +3,8 @@ import jwt from 'jsonwebtoken';
 import { connectDB } from '@/lib/db';
 import { User } from '@/lib/models';
 
+export const dynamic = 'force-dynamic';
+
 const JWT_SECRET = process.env.JWT_SECRET!;
 
 interface JwtPayload {
