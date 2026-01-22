@@ -24,10 +24,10 @@ let isConnected = false;
 export const connectDB = async () => {
   if (isConnected) return;
   try {
-    const mongoUrl = process.env.MONGO_URL;
+    const mongoUrl = process.env.MONGO_URI;
     if (!mongoUrl) {
       // In Vercel/Production, this might not throw immediately to allow for cold starts, but good to check.
-      console.warn('MONGO_URL is not defined in environment variables');
+      console.warn('MONGO_URI is not defined in environment variables');
       return;
     }
     const conn = await mongoose.connect(mongoUrl);
