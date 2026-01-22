@@ -1,25 +1,18 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema, Model } from 'mongoose';
+import { IFactory } from '../types/index.js';
 
-export interface IFactory extends Document {
-    tenantId: string;
-    name: string;
-    timezone: string;
-    location: string;
-    image?: string;
-    createdAt: Date;
-    updatedAt: Date;
-}
+const factorySchema = new Schema<IFactory>(
+    {
+        tenant_id: { type: Schema.Types.ObjectId, ref: 'Tenant', required: true, index: true },
+        name: { type: String, required: true, trim: true },
+        location: { type: String, required: true, trim: true },
+    },
+    {
+        timestamps: { createdAt: 'created_at', updatedAt: false },
+    }
+);
 
-const FactorySchema = new Schema<IFactory>({
-    tenantId: { type: String, required: true, index: true },
-    name: { type: String, required: true },
-    timezone: { type: String, required: true, default: 'UTC' },
-    location: { type: String, required: true },
-    image: { type: String }
-}, {
-    timestamps: true
-});
+// Indexes
+factorySchema.index({ tenant_id: 1, name: 1 });
 
-// Check if model exists before creating (prevents hot reload errors)
-export const Factory = mongoose.models.Factory || mongoose.model<IFactory>('Factory', FactorySchema);
-
+export const Factory: Model<IFactory> = mongoose.model<IFactory>('Factory', factorySchema);

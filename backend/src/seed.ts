@@ -1,166 +1,126 @@
-// Database seeding script with Machine Sessions
-// Run with: npm run seed:db
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
-import { Device } from './models/Device';
-import { Factory } from './models/Factory';
-import { MachineSession } from './models/MachineSession';
-import { User } from './models/User';
+import bcrypt from 'bcryptjs';
+import { connectDatabase } from './config/database.js';
+import { Tenant, Factory, Device, User } from './models/index.js';
 
-dotenv.config({ path: '.env.local' });
+async function seed(): Promise<void> {
+    console.log('🌱 Starting database seed...');
 
-const MONGO_URI = process.env.MONGO_URL;
+    await connectDatabase();
 
-if (!MONGO_URI) {
-    console.error('ERROR: MONGO_URL is not defined in environment variables.');
-    process.exit(1);
-}
+    // Clear existing data (for development only!)
+    console.log('Clearing existing data...');
+    await Promise.all([
+        Tenant.deleteMany({}),
+        Factory.deleteMany({}),
+        Device.deleteMany({}),
+        User.deleteMany({}),
+    ]);
 
-const factories = [
-    {
-        tenantId: 't_tesla',
-        name: 'Austin Giga (Alpha)',
-        timezone: 'America/Chicago',
-        location: 'Austin, TX, USA',
-        image: 'https://images.unsplash.com/photo-1565514020176-88863c1a32a6?auto=format&fit=crop&q=80&w=1000'
-    }
-];
+    // Create tenant
+    console.log('Creating tenant...');
+    const tenant = await Tenant.create({
+        name: 'Demo Enterprise',
+        slug: 'demo',
+        theme: {
+            primaryColor: '#3B82F6',
+            secondaryColor: '#1E40AF',
+            companyName: 'Demo Enterprise',
+        },
+        is_active: true,
+    });
 
-const devices = [
-    {
-        serialNumber: 'SN-ESP32-9901',
-        name: 'CNC Milling Unit A',
-        status: 'ONLINE',
-        firmwareVersion: '1.2.4',
-        lastSeen: new Date(),
-        totalRunningHours: 0,
-        metadata: { model: 'Haas VF-2' }
-    }
-];
+    // Create factories
+    console.log('Creating factories...');
+    const factory1 = await Factory.create({
+        tenant_id: tenant._id,
+        name: 'Main Factory',
+        location: 'New York, USA',
+    });
 
-// Generate sample machine sessions for the past 2 days
-function generateSessions(deviceId: string, factoryId: string, tenantId: string) {
-    const sessions = [];
-    const now = new Date();
+    const factory2 = await Factory.create({
+        tenant_id: tenant._id,
+        name: 'Secondary Factory',
+        location: 'Chicago, USA',
+    });
 
-    // Just 3 sessions total
-    const sessionConfigs = [
-        { hoursAgo: 48, durationMin: 120 },
-        { hoursAgo: 24, durationMin: 90 },
-        { hoursAgo: 2, durationMin: 45 }
-    ];
+    // Create devices
+    console.log('Creating devices...');
+    const devices = await Device.insertMany([
+        {
+            tenant_id: tenant._id,
+            factory_id: factory1._id,
+            device_id: 'DEVICE-001',
+            name: 'CNC Machine Alpha',
+            firmware_version: '1.0.0',
+            is_active: true,
+        },
+        {
+            tenant_id: tenant._id,
+            factory_id: factory1._id,
+            device_id: 'DEVICE-002',
+            name: 'Welding Robot Beta',
+            firmware_version: '1.0.0',
+            is_active: true,
+        },
+        {
+            tenant_id: tenant._id,
+            factory_id: factory2._id,
+            device_id: 'DEVICE-003',
+            name: 'Assembly Line Controller',
+            firmware_version: '1.0.0',
+            is_active: true,
+        },
+    ]);
 
-    for (const config of sessionConfigs) {
-        const startTime = new Date(now.getTime() - config.hoursAgo * 60 * 60 * 1000);
-        const duration = config.durationMin * 60;
-        const stopTime = new Date(startTime.getTime() + duration * 1000);
+    // Create users
+    console.log('Creating users...');
+    const passwordHash = await bcrypt.hash('password123', 12);
 
-        sessions.push({
-            deviceId,
-            factoryId,
-            tenantId,
-            startTime,
-            stopTime,
-            duration
-        });
-    }
-
-    return sessions;
-}
-
-async function seed() {
-    try {
-        console.log('Connecting to MongoDB...');
-        await mongoose.connect(MONGO_URI);
-        console.log('Connected!');
-
-        // Clear existing data
-        console.log('Clearing existing data...');
-        await Factory.deleteMany({});
-        await Device.deleteMany({});
-        await MachineSession.deleteMany({});
-        await User.deleteMany({});
-
-        // Insert default user
-        console.log('Inserting default user...');
-        const adminUser = await User.create({
-            email: 'admin@tesla.com',
-            password: 'password123',
+    await User.insertMany([
+        {
+            tenant_id: tenant._id,
+            email: 'admin@demo.com',
+            password_hash: passwordHash,
             name: 'Admin User',
-            role: 'ADMIN',
-            tenantId: 't_tesla'
-        });
-        console.log(`Inserted admin user: ${adminUser.email}`);
+            role: 'admin',
+            device_permissions: devices.map(d => d._id),
+            is_active: true,
+        },
+        {
+            tenant_id: tenant._id,
+            email: 'programmer@demo.com',
+            password_hash: passwordHash,
+            name: 'Programmer User',
+            role: 'programmer',
+            device_permissions: devices.map(d => d._id),
+            is_active: true,
+        },
+        {
+            tenant_id: tenant._id,
+            email: 'user@demo.com',
+            password_hash: passwordHash,
+            name: 'Regular User',
+            role: 'user',
+            device_permissions: [devices[0]!._id], // Only access to first device
+            is_active: true,
+        },
+    ]);
 
-        // Insert factories
-        console.log('Inserting factories...');
-        const insertedFactories = await Factory.insertMany(factories);
-        console.log(`Inserted ${insertedFactories.length} factories`);
+    console.log('✅ Seed completed successfully!');
+    console.log('');
+    console.log('Test credentials:');
+    console.log('  Admin: admin@demo.com / password123');
+    console.log('  Programmer: programmer@demo.com / password123');
+    console.log('  User: user@demo.com / password123');
+    console.log('');
+    console.log('Tenant slug: demo');
 
-        // Insert devices with factory IDs
-        console.log('Inserting devices...');
-        const devicesWithFactories = devices.map((device, index) => ({
-            ...device,
-            factoryId: insertedFactories[index % 2]._id.toString(),
-            tenantId: 't_tesla'
-        }));
-
-        const insertedDevices = await Device.insertMany(devicesWithFactories);
-        console.log(`Inserted ${insertedDevices.length} devices`);
-
-        // Generate and insert machine sessions
-        console.log('Generating machine sessions...');
-        let allSessions: any[] = [];
-        let totalRunningHours: { [key: string]: number } = {};
-
-        for (const device of insertedDevices) {
-            const sessions = generateSessions(
-                device._id.toString(),
-                device.factoryId,
-                device.tenantId
-            );
-            allSessions = allSessions.concat(sessions);
-
-            // Calculate total running hours for this device
-            const totalSeconds = sessions.reduce((sum, s) => sum + s.duration, 0);
-            totalRunningHours[device._id.toString()] = totalSeconds / 3600;
-        }
-
-        await MachineSession.insertMany(allSessions);
-        console.log(`Inserted ${allSessions.length} machine sessions`);
-
-        // Update device total running hours
-        console.log('Updating device running hours...');
-        for (const [deviceId, hours] of Object.entries(totalRunningHours)) {
-            await Device.findByIdAndUpdate(deviceId, { totalRunningHours: hours });
-        }
-
-        console.log('\n✅ Database seeded successfully!');
-        console.log('\nAdmin User:');
-        console.log(`  - Email: ${adminUser.email}`);
-        console.log(`  - Password: password123`);
-        console.log('\nFactories:');
-        insertedFactories.forEach(f => console.log(`  - ${f.name} (ID: ${f._id})`));
-        console.log('\nDevices:');
-        insertedDevices.forEach(d => console.log(`  - ${d.name} (Serial: ${d.serialNumber}, ID: ${d._id})`));
-        console.log(`\nTotal sessions: ${allSessions.length}`);
-
-        console.log('\n📡 Sample API Request (from device):');
-        console.log('POST /api/v1/ingest');
-        console.log('Content-Type: application/json');
-        console.log(JSON.stringify({
-            deviceId: insertedDevices[0]._id.toString(),
-            startTime: new Date().toISOString(),
-            stopTime: new Date(Date.now() + 3600000).toISOString(), // 1 hour later
-            duration: 3600 // optional, in seconds
-        }, null, 2));
-
-    } catch (error) {
-        console.error('Seeding failed:', error);
-    } finally {
-        await mongoose.disconnect();
-        console.log('\nDisconnected from MongoDB');
-    }
+    await mongoose.disconnect();
+    process.exit(0);
 }
 
-seed();
+seed().catch((error) => {
+    console.error('Seed failed:', error);
+    process.exit(1);
+});

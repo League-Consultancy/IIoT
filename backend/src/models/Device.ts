@@ -1,34 +1,25 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema, Model } from 'mongoose';
+import { IDevice } from '../types/index.js';
 
-export interface IDevice extends Document {
-    serialNumber: string;
-    factoryId: string;
-    tenantId: string;
-    name: string;
-    firmwareVersion: string;
-    lastSeen: Date;
-    totalRunningHours: number;
-    metadata: Record<string, any>;
-    createdAt: Date;
-    updatedAt: Date;
-}
+const deviceSchema = new Schema<IDevice>(
+    {
+        tenant_id: { type: Schema.Types.ObjectId, ref: 'Tenant', required: true, index: true },
+        factory_id: { type: Schema.Types.ObjectId, ref: 'Factory', required: true, index: true },
+        device_id: { type: String, required: true, trim: true },
+        name: { type: String, required: true, trim: true },
+        firmware_version: { type: String, trim: true },
+        registered_at: { type: Date, default: Date.now },
+        metadata: { type: Schema.Types.Mixed },
+        is_active: { type: Boolean, default: true },
+    },
+    {
+        timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
+    }
+);
 
-const DeviceSchema = new Schema<IDevice>({
-    serialNumber: { type: String, required: true, unique: true },
-    factoryId: { type: String, required: true, index: true },
-    tenantId: { type: String, required: true, index: true },
-    name: { type: String, required: true },
-    firmwareVersion: { type: String, required: true },
-    lastSeen: { type: Date, default: Date.now },
-    totalRunningHours: { type: Number, default: 0 },
-    metadata: { type: Schema.Types.Mixed, default: {} }
-}, {
-    timestamps: true
-});
+// Indexes - device_id must be unique per tenant
+deviceSchema.index({ tenant_id: 1, device_id: 1 }, { unique: true });
+deviceSchema.index({ tenant_id: 1, factory_id: 1 });
+deviceSchema.index({ tenant_id: 1, is_active: 1 });
 
-// Compound index for tenant + factory queries
-DeviceSchema.index({ tenantId: 1, factoryId: 1 });
-
-// Check if model exists before creating (prevents hot reload errors)
-export const Device = mongoose.models.Device || mongoose.model<IDevice>('Device', DeviceSchema);
-
+export const Device: Model<IDevice> = mongoose.model<IDevice>('Device', deviceSchema);

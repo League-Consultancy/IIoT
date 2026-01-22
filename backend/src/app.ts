@@ -1,54 +1,85 @@
 import express from 'express';
-import mongoose from 'mongoose';
 import cors from 'cors';
-import dotenv from 'dotenv';
-import deviceRoutes from './routes/deviceRoutes';
-import dashboardRoutes from './routes/dashboardRoutes';
-import authRoutes from './routes/authRoutes';
-
-dotenv.config();
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import { env } from './config/env.js';
+import { connectDatabase, initializeCollections } from './config/database.js';
+import routes from './routes/index.js';
+import { errorHandler, notFoundHandler } from './middlewares/errorHandler.js';
 
 const app = express();
 
-// 1. Global Middleware
+// Security middleware
+app.use(helmet());
 app.use(cors({
-  origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  credentials: false
+    origin: env.CORS_ORIGIN,
+    credentials: true,
 }));
-app.use(express.json({ limit: '1mb' })); // Limit payload size for ingestion
 
-// 2. Database Connection Logic (exported for reuse)
-let isConnected = false;
-export const connectDB = async () => {
-  if (isConnected) return;
-  try {
-    const mongoUrl = process.env.MONGO_URI;
-    if (!mongoUrl) {
-      // In Vercel/Production, this might not throw immediately to allow for cold starts, but good to check.
-      console.warn('MONGO_URI is not defined in environment variables');
-      return;
+// Rate limiting
+const limiter = rateLimit({
+    windowMs: env.RATE_LIMIT_WINDOW_MS,
+    max: env.RATE_LIMIT_MAX_REQUESTS,
+    message: { success: false, error: 'Too many requests, please try again later.' },
+});
+app.use('/api/', limiter);
+
+// Body parsing
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+// Trust proxy for correct IP detection
+app.set('trust proxy', 1);
+
+// API routes
+app.use('/api/v1', routes);
+
+// Root endpoint
+app.get('/', (_req, res) => {
+    res.json({
+        name: 'Enterprise Device Session Analytics Platform',
+        version: '1.0.0',
+        status: 'running',
+        docs: '/api/v1/health',
+    });
+});
+
+// Error handling
+app.use(notFoundHandler);
+app.use(errorHandler);
+
+// Start server
+async function startServer(): Promise<void> {
+    try {
+        // Connect to database
+        await connectDatabase();
+
+        // Initialize collections (creates time-series if needed)
+        await initializeCollections();
+
+        // Start listening
+        app.listen(env.PORT, () => {
+            console.log(`🚀 Server running on port ${env.PORT}`);
+            console.log(`📊 Environment: ${env.NODE_ENV}`);
+            console.log(`🔗 API: http://localhost:${env.PORT}/api/v1`);
+        });
+    } catch (error) {
+        console.error('Failed to start server:', error);
+        process.exit(1);
     }
-    const conn = await mongoose.connect(mongoUrl);
-    isConnected = true;
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
-  } catch (error) {
-    console.error('MongoDB connection error:', error);
-    // Don't exit process in serverless env
-    throw error;
-  }
-};
+}
 
-// 3. Public Routes
-app.get('/health', (req, res) => res.status(200).send('OK'));
-app.use('/api/auth', authRoutes);
+// Handle graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('SIGTERM received, shutting down gracefully');
+    process.exit(0);
+});
 
-// 4. Dashboard API Routes
-app.use('/api/v1', dashboardRoutes);
+process.on('SIGINT', () => {
+    console.log('SIGINT received, shutting down gracefully');
+    process.exit(0);
+});
 
-// 5. Device Ingestion Route
-app.use('/api/v1/ingest', deviceRoutes);
+startServer();
 
-// Export the app
 export default app;

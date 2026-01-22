@@ -1,69 +1,30 @@
-import mongoose, { Schema, Document } from 'mongoose';
-import bcrypt from 'bcryptjs';
+import mongoose, { Schema, Model } from 'mongoose';
+import { IUser, UserRole } from '../types/index.js';
 
-export interface IUser extends Document {
-    email: string;
-    password: string;
-    name: string;
-    role: 'ADMIN' | 'OPERATOR' | 'VIEWER';
-    tenantId: string;
-    factoryIds: string[];
-    createdAt: Date;
-    updatedAt: Date;
-    comparePassword(candidatePassword: string): Promise<boolean>;
-}
-
-const UserSchema = new Schema<IUser>({
-    email: {
-        type: String,
-        required: true,
-        unique: true,
-        lowercase: true,
-        trim: true
+const userSchema = new Schema<IUser>(
+    {
+        tenant_id: { type: Schema.Types.ObjectId, ref: 'Tenant', required: true, index: true },
+        email: { type: String, required: true, lowercase: true, trim: true },
+        password_hash: { type: String, required: true, select: false },
+        name: { type: String, required: true, trim: true },
+        role: {
+            type: String,
+            enum: ['user', 'programmer', 'admin'] as UserRole[],
+            default: 'user',
+            required: true
+        },
+        device_permissions: [{ type: Schema.Types.ObjectId, ref: 'Device' }],
+        last_login: { type: Date },
+        is_active: { type: Boolean, default: true },
     },
-    password: {
-        type: String,
-        required: true,
-        minlength: 6
-    },
-    name: {
-        type: String,
-        required: true,
-        trim: true
-    },
-    role: {
-        type: String,
-        enum: ['ADMIN', 'OPERATOR', 'VIEWER'],
-        default: 'OPERATOR'
-    },
-    tenantId: {
-        type: String,
-        required: true,
-        default: 't_default'
-    },
-    factoryIds: [{
-        type: String
-    }]
-}, {
-    timestamps: true
-});
+    {
+        timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
+    }
+);
 
-// Hash password before saving
-UserSchema.pre('save', async function () {
-    if (!this.isModified('password')) return;
+// Indexes - email must be unique per tenant
+userSchema.index({ tenant_id: 1, email: 1 }, { unique: true });
+userSchema.index({ tenant_id: 1, role: 1 });
+userSchema.index({ tenant_id: 1, is_active: 1 });
 
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-});
-
-// Method to compare password
-UserSchema.methods.comparePassword = async function (candidatePassword: string): Promise<boolean> {
-    return bcrypt.compare(candidatePassword, this.password);
-};
-
-// Index for faster lookups (email index is automatic from unique:true)
-UserSchema.index({ tenantId: 1 });
-
-// Check if model exists before creating (prevents hot reload errors)
-export const User = mongoose.models.User || mongoose.model<IUser>('User', UserSchema);
-
+export const User: Model<IUser> = mongoose.model<IUser>('User', userSchema);

@@ -1,72 +1,57 @@
 import { Router } from 'express';
-import { Device } from '../models/Device';
-import { MachineSession } from '../models/MachineSession';
+import * as deviceController from '../controllers/deviceController.js';
+import * as sessionController from '../controllers/sessionController.js';
+import * as analyticsController from '../controllers/analyticsController.js';
+import * as exportController from '../controllers/exportController.js';
+import { authenticate } from '../middlewares/auth.js';
+import { adminOnly } from '../middlewares/roleGuard.js';
+import { audit } from '../middlewares/audit.js';
 
 const router = Router();
 
-// Endpoint: POST /api/v1/ingest
-router.post('/', async (req, res) => {
-    try {
-        const { deviceId, startTime, stopTime, duration } = req.body;
+// All routes require authentication
+router.use(authenticate);
 
-        // Validate required fields
-        if (!deviceId) {
-            return res.status(400).json({ error: 'deviceId is required' });
-        }
-        if (!startTime || !stopTime) {
-            return res.status(400).json({ error: 'startTime and stopTime are required' });
-        }
+// Device CRUD
+router.get('/', deviceController.listDevices);
+router.get('/:deviceId', deviceController.getDevice);
+router.post(
+    '/',
+    adminOnly,
+    deviceController.createDeviceValidation,
+    audit({ action: 'device.create', resourceType: 'device', getResourceId: (req) => req.body.device_id }),
+    deviceController.createDevice
+);
+router.patch(
+    '/:deviceId',
+    adminOnly,
+    deviceController.updateDeviceValidation,
+    audit({ action: 'device.update', resourceType: 'device', getResourceId: (req) => req.params.deviceId ?? '' }),
+    deviceController.updateDevice
+);
+router.delete(
+    '/:deviceId',
+    adminOnly,
+    audit({ action: 'device.delete', resourceType: 'device', getResourceId: (req) => req.params.deviceId ?? '' }),
+    deviceController.deleteDevice
+);
 
-        // Find the device to get factoryId and tenantId
-        // Try ID first, then serialNumber
-        let targetDevice = await Device.findById(deviceId);
-        
-        if (!targetDevice) {
-            targetDevice = await Device.findOne({ serialNumber: deviceId });
-            if (!targetDevice) {
-                return res.status(404).json({ error: 'Device not found' });
-            }
-        }
+// Device sessions
+router.get('/:deviceId/sessions', sessionController.getDeviceSessions);
 
-        // Calculate duration if not provided
-        const startDate = new Date(startTime);
-        const stopDate = new Date(stopTime);
-        const calculatedDuration = duration || Math.floor((stopDate.getTime() - startDate.getTime()) / 1000);
+// Device analytics (per-device only as per spec)
+router.get('/:deviceId/analytics/daily', analyticsController.getDailyAnalytics);
+router.get('/:deviceId/analytics/weekly', analyticsController.getWeeklyAnalytics);
+router.get('/:deviceId/analytics/monthly', analyticsController.getMonthlyAnalytics);
+router.get('/:deviceId/analytics/summary', analyticsController.getAnalyticsSummary);
+router.get('/:deviceId/analytics/period', analyticsController.getPeriodAnalytics);
 
-        // Create machine session
-        const session = new MachineSession({
-            deviceId: targetDevice._id.toString(),
-            factoryId: targetDevice.factoryId,
-            tenantId: targetDevice.tenantId,
-            startTime: startDate,
-            stopTime: stopDate,
-            duration: calculatedDuration
-        });
-
-        await session.save();
-
-        // Update device lastSeen and add to totalRunningHours
-        await Device.findByIdAndUpdate(
-            targetDevice._id,
-            {
-                lastSeen: stopDate,
-                status: 'ONLINE',
-                $inc: { totalRunningHours: calculatedDuration / 3600 }
-            },
-            { new: true }
-        );
-
-        // Note: WebSocket broadcast omitted for serverless environment compatibility
-
-        res.status(202).json({
-            success: true,
-            sessionId: session._id,
-            duration: calculatedDuration
-        });
-    } catch (error) {
-        console.error('Session ingestion failed:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
+// Device session exports
+router.post(
+    '/:deviceId/sessions/export',
+    exportController.createExportValidation,
+    audit({ action: 'export.create', resourceType: 'export_job', getResourceId: (req) => req.params.deviceId ?? '' }),
+    exportController.createExport
+);
 
 export default router;
