@@ -12,8 +12,8 @@ const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || '7d') as SignOptions['expi
 export async function POST(request: NextRequest) {
     try {
         console.log('Login attempt - connecting to DB...');
-        await connectDB();
-        console.log('DB connected successfully');
+        const conn = await connectDB();
+        console.log(`DB connected successfully to: ${conn.connection.host}/${conn.connection.name}`);
 
         const body = await request.json();
         const { email, password, tenant_slug } = body;
