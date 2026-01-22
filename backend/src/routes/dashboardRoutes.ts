@@ -2,8 +2,59 @@ import { Router } from 'express';
 import { Device } from '../models/Device';
 import { Factory } from '../models/Factory';
 import { Measurement } from '../models/Measurement';
+import { MachineSession } from '../models/MachineSession';
 
 const router = Router();
+
+// Get machine sessions for a device
+router.get('/sessions/:deviceId', async (req, res) => {
+    try {
+        const { deviceId } = req.params;
+        const { days = 7 } = req.query;
+        const since = new Date(Date.now() - Number(days) * 24 * 60 * 60 * 1000);
+
+        const sessions = await MachineSession.find({
+            deviceId,
+            startTime: { $gte: since }
+        }).sort({ startTime: -1 }).limit(500);
+
+        res.json(sessions.map(s => ({
+            id: s._id,
+            deviceId: s.deviceId,
+            startTime: s.startTime.toISOString(),
+            stopTime: s.stopTime.toISOString(),
+            duration: s.duration
+        })));
+    } catch (error) {
+        console.error('Error fetching device sessions:', error);
+        res.status(500).json({ error: 'Failed to fetch sessions' });
+    }
+});
+
+// Get all sessions (with filters)
+router.get('/sessions', async (req, res) => {
+    try {
+        const { deviceId, factoryId, days = 7 } = req.query;
+        const since = new Date(Date.now() - Number(days) * 24 * 60 * 60 * 1000);
+
+        const filter: any = { startTime: { $gte: since } };
+        if (deviceId) filter.deviceId = deviceId;
+        if (factoryId) filter.factoryId = factoryId;
+
+        const sessions = await MachineSession.find(filter).sort({ startTime: -1 }).limit(500);
+        res.json(sessions.map(s => ({
+            id: s._id,
+            deviceId: s.deviceId,
+            factoryId: s.factoryId,
+            startTime: s.startTime.toISOString(),
+            stopTime: s.stopTime.toISOString(),
+            duration: s.duration
+        })));
+    } catch (error) {
+        console.error('Error fetching sessions:', error);
+        res.status(500).json({ error: 'Failed to fetch sessions' });
+    }
+});
 
 // Get all devices (with optional filters)
 router.get('/devices', async (req, res) => {

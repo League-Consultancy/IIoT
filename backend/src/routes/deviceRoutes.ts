@@ -1,34 +1,72 @@
 import { Router } from 'express';
-import { IngestionService } from '../services/IngestionService';
-// In a real app, middleware would authenticate the DEVICE via Mutual TLS or specialized Device Token
-// For this SaaS context, we assume the device sends a signed JWT token provisioning during setup.
+import { Device } from '../models/Device';
+import { MachineSession } from '../models/MachineSession';
 
 const router = Router();
 
+// Endpoint: POST /api/v1/ingest
 router.post('/', async (req, res) => {
-  try {
-    const { deviceId, factoryId, tenantId, data } = req.body;
+    try {
+        const { deviceId, startTime, stopTime, duration } = req.body;
 
-    // Basic validation
-    if (!data || !Array.isArray(data)) {
-      return res.status(400).json({ error: 'Invalid data format' });
+        // Validate required fields
+        if (!deviceId) {
+            return res.status(400).json({ error: 'deviceId is required' });
+        }
+        if (!startTime || !stopTime) {
+            return res.status(400).json({ error: 'startTime and stopTime are required' });
+        }
+
+        // Find the device to get factoryId and tenantId
+        // Try ID first, then serialNumber
+        let targetDevice = await Device.findById(deviceId);
+        
+        if (!targetDevice) {
+            targetDevice = await Device.findOne({ serialNumber: deviceId });
+            if (!targetDevice) {
+                return res.status(404).json({ error: 'Device not found' });
+            }
+        }
+
+        // Calculate duration if not provided
+        const startDate = new Date(startTime);
+        const stopDate = new Date(stopTime);
+        const calculatedDuration = duration || Math.floor((stopDate.getTime() - startDate.getTime()) / 1000);
+
+        // Create machine session
+        const session = new MachineSession({
+            deviceId: targetDevice._id.toString(),
+            factoryId: targetDevice.factoryId,
+            tenantId: targetDevice.tenantId,
+            startTime: startDate,
+            stopTime: stopDate,
+            duration: calculatedDuration
+        });
+
+        await session.save();
+
+        // Update device lastSeen and add to totalRunningHours
+        await Device.findByIdAndUpdate(
+            targetDevice._id,
+            {
+                lastSeen: stopDate,
+                status: 'ONLINE',
+                $inc: { totalRunningHours: calculatedDuration / 3600 }
+            },
+            { new: true }
+        );
+
+        // Note: WebSocket broadcast omitted for serverless environment compatibility
+
+        res.status(202).json({
+            success: true,
+            sessionId: session._id,
+            duration: calculatedDuration
+        });
+    } catch (error) {
+        console.error('Session ingestion failed:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
-
-    // In a production system, we would validate that req.user.sub === deviceId
-    // to prevent spoofing.
-
-    await IngestionService.processBatch({
-      deviceId,
-      factoryId,
-      tenantId, // In real scenario, extracted from Device Token
-      readings: data
-    });
-
-    return res.status(202).json({ success: true }); // 202 Accepted (Async processing)
-  } catch (error) {
-    console.error('Ingestion failed:', error);
-    return res.status(500).json({ error: 'Internal server error' });
-  }
 });
 
 export default router;
