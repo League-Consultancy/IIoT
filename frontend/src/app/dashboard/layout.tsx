@@ -10,7 +10,6 @@ import {
     LayoutDashboard,
     HardDrive,
     Factory,
-    FileDown,
     LogOut,
     Moon,
     Sun,
@@ -57,7 +56,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
         { name: 'Devices', href: '/dashboard/devices', icon: HardDrive },
         { name: 'Factories', href: '/dashboard/factories', icon: Factory },
-        { name: 'Exports', href: '/dashboard/exports', icon: FileDown },
     ];
 
     // Check if current path matches navigation item
@@ -115,8 +113,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                     key={item.name}
                                     href={item.href}
                                     className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${active
-                                            ? 'bg-primary-500/10 text-primary-500 font-medium'
-                                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                        ? 'bg-primary-500/10 text-primary-500 font-medium'
+                                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                                         }`}
                                     onClick={() => setSidebarOpen(false)}
                                 >
