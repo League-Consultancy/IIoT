@@ -1,0 +1,38 @@
+{
+  "name": "iot-monitor-final",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:backend": "npx tsx --env-file=.env.local backend/src/server.ts",
+    "dev:all": "concurrently \"npm run dev\" \"npm run dev:backend\"",
+    "seed:db": "npx tsx --env-file=.env.local backend/src/seed.ts",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@types/bcryptjs": "^3.0.0",
+    "@types/ws": "^8.18.1",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongodb": "^7.0.0",
+    "mongoose": "^9.1.2",
+    "process": "^0.11.10",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "recharts": "^3.6.0",
+    "redis": "^5.10.0",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^9.2.1",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}

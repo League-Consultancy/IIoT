@@ -1,0 +1,5 @@
+{
+  "name": "IOT Monitor Final",
+  "description": "Enterprise-grade SaaS platform for industrial machine monitoring using ESP32 devices. Features multi-tenancy, time-series data visualization, and OTA management.",
+  "requestFramePermissions": []
+}
