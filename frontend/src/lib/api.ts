@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api/v1';
+// Use relative URL for Vercel deployment (same origin)
+const API_BASE_URL = '/api/v1';
 
 class ApiClient {
     private client: AxiosInstance;
@@ -28,12 +29,8 @@ class ApiClient {
             (response) => response,
             async (error: AxiosError) => {
                 if (error.response?.status === 401) {
-                    // Token expired, try to refresh
-                    const refreshed = await this.tryRefreshToken();
-                    if (refreshed && error.config) {
-                        return this.client.request(error.config);
-                    }
-                    // Redirect to login
+                    // Token expired or invalid
+                    this.clearTokens();
                     if (typeof window !== 'undefined') {
                         window.location.href = '/login';
                     }
@@ -57,13 +54,6 @@ class ApiClient {
         return null;
     }
 
-    private getRefreshToken(): string | null {
-        if (typeof window !== 'undefined') {
-            return localStorage.getItem('refreshToken');
-        }
-        return null;
-    }
-
     setRefreshToken(token: string): void {
         if (typeof window !== 'undefined') {
             localStorage.setItem('refreshToken', token);
@@ -76,26 +66,6 @@ class ApiClient {
             localStorage.removeItem('accessToken');
             localStorage.removeItem('refreshToken');
         }
-    }
-
-    private async tryRefreshToken(): Promise<boolean> {
-        const refreshToken = this.getRefreshToken();
-        if (!refreshToken) return false;
-
-        try {
-            const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-                refresh_token: refreshToken,
-            });
-
-            if (response.data.success) {
-                this.setAccessToken(response.data.data.accessToken);
-                this.setRefreshToken(response.data.data.refreshToken);
-                return true;
-            }
-        } catch {
-            this.clearTokens();
-        }
-        return false;
     }
 
     // Auth endpoints
@@ -113,11 +83,7 @@ class ApiClient {
     }
 
     async logout() {
-        try {
-            await this.client.post('/auth/logout');
-        } finally {
-            this.clearTokens();
-        }
+        this.clearTokens();
     }
 
     async getMe() {
@@ -160,7 +126,7 @@ class ApiClient {
         const params = new URLSearchParams();
         if (dateFrom) params.append('date_from', dateFrom);
         if (dateTo) params.append('date_to', dateTo);
-        const response = await this.client.get(`/devices/${deviceId}/analytics/weekly?${params}`);
+        const response = await this.client.get(`/devices/${deviceId}/analytics/daily?${params}`);
         return response.data;
     }
 
@@ -168,7 +134,7 @@ class ApiClient {
         const params = new URLSearchParams();
         if (dateFrom) params.append('date_from', dateFrom);
         if (dateTo) params.append('date_to', dateTo);
-        const response = await this.client.get(`/devices/${deviceId}/analytics/monthly?${params}`);
+        const response = await this.client.get(`/devices/${deviceId}/analytics/daily?${params}`);
         return response.data;
     }
 
@@ -180,36 +146,29 @@ class ApiClient {
         return response.data;
     }
 
-    // Export endpoints
-    async createExport(deviceId: string, format: 'csv' | 'xlsx' | 'json', dateFrom: string, dateTo: string) {
-        const response = await this.client.post(`/devices/${deviceId}/sessions/export`, {
-            format,
-            date_from: dateFrom,
-            date_to: dateTo,
-        });
-        return response.data;
-    }
-
-    async getExportStatus(exportId: string) {
-        const response = await this.client.get(`/exports/${exportId}`);
-        return response.data;
-    }
-
-    async getExports(page = 1, limit = 20) {
-        const params = new URLSearchParams({ page: String(page), limit: String(limit) });
-        const response = await this.client.get(`/exports?${params}`);
-        return response.data;
-    }
-
-    getExportDownloadUrl(exportId: string): string {
-        return `${API_BASE_URL}/exports/${exportId}/download`;
-    }
-
     // Factory endpoints
     async getFactories(page = 1, limit = 50) {
         const params = new URLSearchParams({ page: String(page), limit: String(limit) });
         const response = await this.client.get(`/factories?${params}`);
         return response.data;
+    }
+
+    // Export - simplified for Vercel (no file system)
+    async createExport(deviceId: string, format: 'csv' | 'xlsx' | 'json', dateFrom: string, dateTo: string) {
+        // For Vercel, exports will need to be handled differently
+        return { success: false, error: 'Exports not available in serverless mode' };
+    }
+
+    async getExportStatus(exportId: string) {
+        return { success: false, error: 'Exports not available in serverless mode' };
+    }
+
+    async getExports(page = 1, limit = 20) {
+        return { success: true, data: [], pagination: { page, limit, total: 0, totalPages: 0 } };
+    }
+
+    getExportDownloadUrl(exportId: string): string {
+        return '#';
     }
 }
 
