@@ -11,10 +11,13 @@ const JWT_EXPIRES_IN = (process.env.JWT_EXPIRES_IN || '7d') as SignOptions['expi
 
 export async function POST(request: NextRequest) {
     try {
+        console.log('Login attempt - connecting to DB...');
         await connectDB();
+        console.log('DB connected successfully');
 
         const body = await request.json();
         const { email, password, tenant_slug } = body;
+        console.log('Login attempt for email:', email);
 
         if (!email || !password) {
             return NextResponse.json(
@@ -36,30 +39,36 @@ export async function POST(request: NextRequest) {
             tenantId = tenant._id;
         }
 
-        // Build query
+        // Build query - search by email only, without tenant constraint for login
         const query: Record<string, unknown> = {
             email: email.toLowerCase(),
             is_active: true
         };
-        if (tenantId) {
-            query['tenant_id'] = tenantId;
-        }
+        console.log('Query:', JSON.stringify(query));
 
         // Find user with password
         const user = await User.findOne(query).select('+password_hash');
+        console.log('User found:', user ? 'yes' : 'no');
 
         if (!user) {
+            // List all users for debugging
+            const allUsers = await User.find({}).select('email is_active');
+            console.log('All users in DB:', JSON.stringify(allUsers));
+
             return NextResponse.json(
-                { success: false, error: 'Invalid credentials' },
+                { success: false, error: 'Invalid credentials - user not found' },
                 { status: 401 }
             );
         }
 
         // Verify password
+        console.log('Checking password...');
         const isValidPassword = await bcrypt.compare(password, user.password_hash);
+        console.log('Password valid:', isValidPassword);
+
         if (!isValidPassword) {
             return NextResponse.json(
-                { success: false, error: 'Invalid credentials' },
+                { success: false, error: 'Invalid credentials - wrong password' },
                 { status: 401 }
             );
         }
@@ -94,6 +103,8 @@ export async function POST(request: NextRequest) {
             { expiresIn: '30d' }
         );
 
+        console.log('Login successful for:', user.email);
+
         return NextResponse.json({
             success: true,
             data: {
@@ -111,7 +122,7 @@ export async function POST(request: NextRequest) {
     } catch (error) {
         console.error('Login error:', error);
         return NextResponse.json(
-            { success: false, error: 'Internal server error' },
+            { success: false, error: 'Internal server error: ' + (error as Error).message },
             { status: 500 }
         );
     }
