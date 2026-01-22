@@ -1,85 +1,66 @@
 # Enterprise Device Session Analytics Platform
 
-A multi-tenant, session-based analytics platform that ingests immutable device work intervals, computes per-device historical working duration, and provides exportable logs for enterprise audit and reporting.
+A multi-tenant, session-based analytics platform deployed on Vercel. Ingests device work intervals, computes historical working duration, and provides analytics for enterprise reporting.
 
-## Project Structure
+**Live Demo:** [https://i-io-t.vercel.app](https://i-io-t.vercel.app)
 
-```
-├── backend/          # Node.js + Express + TypeScript API
-└── frontend/         # Next.js 14 + React + Tailwind CSS
-```
+## Tech Stack
 
-## Quick Start
+- **Frontend**: Next.js 14 (App Router) + React + Tailwind CSS
+- **Backend**: Next.js Serverless API Routes (formerly Express)
+- **Database**: MongoDB Atlas (Time-Series Collections)
+- **Deployment**: Vercel
 
-### Prerequisites
+## Features
 
-- Node.js 18+
-- MongoDB 5.0+ (for time-series collections)
+- ✅ **Session-Based Analytics**: Immutable historical data processing (no live status)
+- ✅ **Multi-Tenant System**: Data isolation per tenant
+- ✅ **Serverless Architecture**: Fully deployed on Vercel
+- ✅ **Client-Side Exports**: Generate CSV/XLSX/JSON directly in browser
+- ✅ **Secure Auth**: JWT authentication with role-based access
 
-### Backend Setup
+## Quick Start (Local Development)
 
+### 1. Clone & Install
 ```bash
-cd backend
+git clone https://github.com/League-Consultancy/IIoT.git
+cd IIoT/frontend
 npm install
-npm run dev
 ```
 
-The API will start at `http://localhost:3001`.
+### 2. Configure Environment
+Create `.env.local` in `frontend/`:
+```env
+MONGODB_URI=your_mongodb_connection_string
+JWT_SECRET=your_secret_key
+JWT_EXPIRES_IN=7d
+```
 
-### Seed Demo Data
-
+### 3. Run Locally
 ```bash
-cd backend
-npx tsx src/seed.ts
-```
-
-**Test credentials:**
-- Admin: `admin@demo.com` / `password123`
-- User: `user@demo.com` / `password123`
-
-### Frontend Setup
-
-```bash
-cd frontend
-npm install
 npm run dev
+# App will run at http://localhost:3000
 ```
 
-The app will start at `http://localhost:3000`.
+## Deployment
 
-## API Endpoints
+The app is configured for **Vercel** with a monorepo structure (Root directory: `frontend`).
 
-### Authentication
+1. push to main
+2. Vercel automatically deploys
+
+---
+
+## API Documentation
+
+All API routes are at `/api/v1/*`:
+
 - `POST /api/v1/auth/login` - Login
-- `POST /api/v1/auth/refresh` - Refresh token
-- `GET /api/v1/auth/me` - Get current user
-
-### Session Ingestion
-- `POST /api/v1/device/session` - Ingest session (idempotent)
-
-### Devices
 - `GET /api/v1/devices` - List devices
-- `GET /api/v1/devices/:deviceId` - Get device
-- `POST /api/v1/devices` - Register device (admin)
+- `GET /api/v1/factories` - List factories (and devices per factory)
+- `GET /api/v1/devices/:id/analytics/daily` - Daily duration metrics
 
-### Analytics (per-device only)
-- `GET /api/v1/devices/:deviceId/analytics/daily`
-- `GET /api/v1/devices/:deviceId/analytics/weekly`
-- `GET /api/v1/devices/:deviceId/analytics/monthly`
-- `GET /api/v1/devices/:deviceId/analytics/summary`
+## Test Credentials
 
-### Exports
-- `POST /api/v1/devices/:deviceId/sessions/export` - Create export
-- `GET /api/v1/exports/:exportId` - Get status
-- `GET /api/v1/exports/:exportId/download` - Download file
-
-## Key Features
-
-- ✅ Session-based analytics (no live status)
-- ✅ Immutable data storage
-- ✅ Idempotent ingestion
-- ✅ Multi-tenant isolation
-- ✅ JWT authentication with roles
-- ✅ Export to CSV/XLSX/JSON
-- ✅ Dark mode UI
-- ✅ Responsive design
+- **Admin**: `admin@demo.com` / `password123`
+- **User**: `user@demo.com` / `password123`
